@@ -9,7 +9,7 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Communeed",
+  title: "InsightMinds",
   description: "Therapist and client AI communication platform",
 };
 

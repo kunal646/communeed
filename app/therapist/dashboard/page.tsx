@@ -147,5 +147,6 @@ async function getDashboardData(): Promise<DashboardData | null> {
 
 export default async function DashboardServer() {
     const data = await getDashboardData()
+    console.log(data)
     return <DashboardClient initialData={data} />
 } 

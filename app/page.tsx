@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <nav className="w-full p-4 flex justify-between items-center border-b">
-        <h1 className="text-2xl font-bold">Communeed</h1>
+        <h1 className="text-2xl font-bold">InsightMinds</h1>
       </nav>
 
       <div className="flex flex-col items-center justify-center min-h-[80vh] p-4 text-center">

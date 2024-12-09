@@ -24,6 +24,7 @@ import { createClient } from "@/utils/supabase/client"
 import { ClientWithProfile } from "@/types/database"
 import { useToast } from "@/hooks/use-toast"
 import { AssemblyAI } from 'assemblyai';
+import { useRouter } from "next/navigation"
 
 interface FormData {
     clientId: string;
@@ -56,6 +57,7 @@ export function UploadRecordingDialog() {
     const [isUploading, setIsUploading] = React.useState(false);
     const { toast } = useToast()
     const [currentUser, setCurrentUser] = React.useState<any>(null);
+    const router = useRouter()
 
     React.useEffect(() => {
         const fetchClients = async () => {
@@ -224,6 +226,7 @@ export function UploadRecordingDialog() {
                 description: "Recording uploaded and transcribed successfully.",
             });
             setOpen(false);
+            router.push(`/therapist/dashboard/sessions/${sessionData.id}`);
 
         } catch (error) {
             console.error('Error:', error);
@@ -398,7 +401,3 @@ export function UploadRecordingDialog() {
         </>
     )
 }
-
-
-
-
