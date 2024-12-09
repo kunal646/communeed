@@ -41,7 +41,7 @@ async function getSessionsData(): Promise<SessionsData | null> {
             )
         `)
         .eq('therapist_id', user?.id)
-        .order('session_date', { ascending: true })
+        .order('session_date', { ascending: false })
 
     if (error) {
         console.error("Error fetching sessions:", error)
