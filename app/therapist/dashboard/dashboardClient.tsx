@@ -163,14 +163,14 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                         <CardTitle>Overview</CardTitle>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <Overview />
+                        <Overview sessions={initialData?.recentSessions || []} />
                     </CardContent>
                 </Card>
                 <Card className="col-span-3">
                     <CardHeader>
                         <CardTitle>Recent Sessions</CardTitle>
                         <CardDescription>
-                            You had {stats.sessionsThisMonth} sessions this month
+                            You had {stats.sessionsThisMonth} sessions this month (showing last 5)
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

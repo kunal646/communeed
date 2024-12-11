@@ -219,7 +219,6 @@ export default function SessionPage() {
                             )}
                         </div>
                     </div>
-
                     <div className="p-6">
                         <TabsContent value="note" className="mt-0 space-y-6">
                             <div className="space-y-4">
@@ -233,7 +232,7 @@ export default function SessionPage() {
                                 {Object.entries(noteContent).map(([key, value], index) => (
 
 
-                                    <div className="space-y-6">
+                                    <div key={index} className="space-y-6">
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <h2 className="text-lg font-semibold">{key}</h2>

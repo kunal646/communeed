@@ -1,234 +1,130 @@
-"use client"
-import { ClientLayout } from "@/components/client-layout"
-import { use, useState, useEffect } from "react"
-import { createClient } from "@/utils/supabase/client"
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    LineChart,
-    Line,
-    Legend
-} from 'recharts'
+import { createClient } from "@/utils/supabase/server"
+import { AnalyticsClient } from "./clientAnalytics"
 
-export default function AnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
-    const resolvedParams = use(params)
-    const [timeframe, setTimeframe] = useState<'week' | 'month'>('week')
 
-    // Weekly Scorecard Data
-    const weeklyScorecard = [
-        {
-            metric: "Mood Stability",
-            current: 6,
-            target: 3,
-            progress: 50,
-            unit: "points"
-        },
-        {
-            metric: "Negative Self-Talk",
-            current: 30,
-            target: 10,
-            progress: 67,
-            unit: "%"
-        },
-        {
-            metric: "Binge Episodes",
-            current: 2,
-            target: 1,
-            progress: 75,
-            unit: "per week"
-        },
-        {
-            metric: "Mindfulness Practice",
-            current: 2,
-            target: 3,
-            progress: 66,
-            unit: "days"
+type Goal = {
+    id: number
+    client_id: string
+    goal: string
+    target: number
+    target_duration: 'daily' | 'weekly'
+    created_at: string
+    updated_at: string
+}
+
+type GoalProgress = Goal & {
+    progress: number
+    percentage: number
+}
+export default async function AnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
+    const supabase = await createClient()
+
+    // Await the params
+    const { id } = await params
+
+    const { data: goalsData, error: goalsError } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('client_id', id)
+
+    // Get date 7 days ago
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { data: assessmentsData, error: assessmentsError } = await supabase
+        .from('assessments')
+        .select('*')
+        .eq('client_id', id)
+        .gte('assessment_date', sevenDaysAgo.toISOString())
+        .order('assessment_date', { ascending: false })
+
+
+    // Process goals with assessments data
+    const processedGoals: GoalProgress[] = (goalsData || []).map(goal => {
+        // Filter assessments based on goal duration
+        const relevantAssessments = (assessmentsData || []).filter(assessment => {
+            if (goal.target_duration === 'daily') {
+                // For daily goals, only consider assessments from the last 24 hours that match the goal
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return new Date(assessment.assessment_date) >= today && assessment.assessment === goal.goal;
+            } else {
+                // For weekly goals, use all assessments from last 7 days that match the goal
+                return assessment.assessment === goal.goal;
+            }
+        });
+
+        // Count positive outcomes (true values) from assessments
+        const positiveOutcomes = relevantAssessments.reduce((sum, assessment) => {
+            return sum + (assessment.outcome ? 1 : 0);
+        }, 2);
+
+        // Calculate score out of 10 based on ratio of positive outcomes
+        const progressScore = relevantAssessments.length > 0
+            ? Math.round((positiveOutcomes / (goal.target_duration === 'weekly' ? relevantAssessments.length * 7 : relevantAssessments.length)) * 10)
+            : 0;
+
+        // Calculate percentage (score out of 10 converted to percentage)
+        const percentage = (progressScore / 10) * 100;
+
+        return {
+            ...goal,
+            progress: progressScore, // Score out of 10
+            percentage: Math.min(100, Math.max(0, percentage)) // Clamp between 0-100
+        };
+    });
+    if (goalsError) {
+        console.error('Error fetching goals:', goalsError)
+        return null
+    }
+    // Get general assessments data
+    const generalAssessments = ["Positive self-talk", "good mood"];
+
+    // Group assessments by date for each type
+    const dailyAssessments = (assessmentsData || []).reduce((acc, assessment) => {
+        if (!generalAssessments.includes(assessment.assessment)) return acc;
+
+        // Get date string without time
+        const dateStr = new Date(assessment.assessment_date).toISOString().split('T')[0];
+
+        if (!acc[dateStr]) {
+            acc[dateStr] = {
+                date: dateStr,
+                'Positive self-talk': { total: 0, positive: 0 },
+                'good mood': { total: 0, positive: 0 }
+            };
         }
-    ]
 
-    // Mood Trendline Data
-    const moodTrendData = [
-        { day: "Mon", mood: 6, event: "Family dinner" },
-        { day: "Tue", mood: 4, event: "Failed test" },
-        { day: "Wed", mood: 7, event: null },
-        { day: "Thu", mood: 5, event: "Social media trigger" },
-        { day: "Fri", mood: 8, event: "Therapy session" },
-        { day: "Sat", mood: 6, event: null },
-        { day: "Sun", mood: 4, event: "Skipped meal" }
-    ]
-
-    // Coping Tools Data
-    const copingToolsData = [
-        {
-            tool: "Journaling",
-            usageCount: 2,
-            moodImprovement: 2,
-            effectiveness: 40
-        },
-        {
-            tool: "Mindfulness",
-            usageCount: 3,
-            moodImprovement: 4,
-            effectiveness: 80
-        },
-        {
-            tool: "Breathing Exercises",
-            usageCount: 1,
-            moodImprovement: 1,
-            effectiveness: 20
+        // Update counts for the specific assessment type
+        acc[dateStr][assessment.assessment].total += 1;
+        if (assessment.outcome) {
+            acc[dateStr][assessment.assessment].positive += 1;
         }
-    ]
 
-    // Positive Self-Talk Data
-    const selfTalkData = [
-        { day: "Mon", positive: 30, negative: 70 },
-        { day: "Tue", positive: 45, negative: 55 },
-        { day: "Wed", positive: 60, negative: 40 },
-        { day: "Thu", positive: 40, negative: 60 },
-        { day: "Fri", positive: 70, negative: 30 },
-        { day: "Sat", positive: 55, negative: 45 },
-        { day: "Sun", positive: 35, negative: 65 }
-    ]
+        return acc;
+    }, {} as Record<string, {
+        date: string,
+        'Positive self-talk': { total: number, positive: number },
+        'good mood': { total: number, positive: number }
+    }>);
 
-    return (
-        <ClientLayout>
+    // Convert to array and calculate percentages
+    const dailyStats = Object.values(dailyAssessments as Record<string, {
+        date: string,
+        'Positive self-talk': { total: number, positive: number },
+        'good mood': { total: number, positive: number }
+    }>).map(day => ({
+        date: day.date,
+        'Positive self-talk': day['Positive self-talk'].total > 0
+            ? (day['Positive self-talk'].positive / day['Positive self-talk'].total) * 100
+            : 0,
+        'good mood': day['good mood'].total > 0
+            ? (day['good mood'].positive / day['good mood'].total) * 100
+            : 0
+    })).sort((a, b) => a.date.localeCompare(b.date));
 
-            <div className="space-y-8">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-3xl font-bold tracking-tight">Client Analytics</h2>
-                    <Select value={timeframe} onValueChange={(value: 'week' | 'month') => setTimeframe(value)}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select timeframe" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="week">Last 7 days</SelectItem>
-                            <SelectItem value="month">Last 30 days</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+    // Add dailyStats to the data being passed to the client
 
-                {/* Weekly Scorecard */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {weeklyScorecard.map((item) => (
-                        <Card key={item.metric}>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-lg">{item.metric}</CardTitle>
-                                <CardDescription>
-                                    Current: {item.current} {item.unit} → Target: {item.target} {item.unit}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Progress value={item.progress} className="h-2" />
-                                <p className="text-sm text-muted-foreground mt-2">
-                                    Progress: {item.progress}% completed
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
 
-                {/* Mood Trendline */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Mood Trendline</CardTitle>
-                        <CardDescription>Daily mood fluctuations with significant events</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={moodTrendData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="day" />
-                                    <YAxis domain={[0, 10]} />
-                                    <Tooltip
-                                        content={({ payload, label }) => {
-                                            if (payload && payload.length) {
-                                                const data = payload[0].payload;
-                                                return (
-                                                    <div className="bg-background p-2 border rounded-lg shadow-sm">
-                                                        <p className="font-medium">{label}</p>
-                                                        <p>Mood: {data.mood}/10</p>
-                                                        {data.event && <p>Event: {data.event}</p>}
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        }}
-                                    />
-                                    <Line type="monotone" dataKey="mood" stroke="#8884d8" />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Coping Tools Effectiveness */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Coping Tools Effectiveness</CardTitle>
-                        <CardDescription>Usage frequency and mood improvement</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={copingToolsData} layout="vertical">
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis type="number" domain={[0, 100]} />
-                                    <YAxis dataKey="tool" type="category" />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Bar dataKey="effectiveness" fill="#8884d8" name="Effectiveness %" />
-                                    <Bar dataKey="usageCount" fill="#82ca9d" name="Usage Count" />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Self-Talk Analysis */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Positive vs Negative Self-Talk</CardTitle>
-                        <CardDescription>Daily breakdown of self-talk patterns</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={selfTalkData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="day" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Bar dataKey="positive" fill="#82ca9d" name="Positive %" stackId="a" />
-                                    <Bar dataKey="negative" fill="#8884d8" name="Negative %" stackId="a" />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </ClientLayout>
-    )
-} 
+    return <AnalyticsClient initialGoalsData={processedGoals} dailyStats={dailyStats} />
+}

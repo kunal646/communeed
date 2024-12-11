@@ -136,7 +136,6 @@ async function getDashboardData(): Promise<DashboardData | null> {
         .gte('session_date', firstDayOfMonth.toISOString())
         .lt('session_date', now.toISOString())
         .order('session_date', { ascending: false })
-        .limit(5)
 
     return {
         therapistName: therapistData.full_name,

@@ -21,7 +21,7 @@ export function RecentSales({ sessions }: { sessions: Session[] }) {
 
     return (
         <div className="space-y-8">
-            {sessions.map((session) => (
+            {sessions.slice(0, 5).map((session) => (
                 <div key={session.id} className="flex items-center">
                     <Avatar className="h-9 w-9">
                         <AvatarFallback>

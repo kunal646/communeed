@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { AudioLines } from 'lucide-react'
 import { createClient } from "@/utils/supabase/client"
 import { ClientLayout } from "@/components/client-layout"
+import ClusteringGraph from '@/components/clusteringGraph'
 interface Message {
     client_id: string
     text_message: string | null
@@ -36,12 +37,32 @@ export default function DailyLogsPage({ params }: { params: Promise<{ id: string
         }
 
         fetchMessages()
+
+        // Subscribe to new messages
+        const channel = supabase
+            .channel('messages')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'messages',
+                filter: `client_id=eq.${resolvedParams.id}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setMessages(prev => [payload.new as Message, ...prev])
+                }
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [resolvedParams.id])
 
     return (
         <ClientLayout>
 
             <div className="space-y-8">
+                <ClusteringGraph />
                 <div className="bg-background rounded-lg shadow-sm border border-border">
                     <ScrollArea className="h-[600px]">
                         <div className="p-4 space-y-4">
